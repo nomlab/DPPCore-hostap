@@ -1184,6 +1184,26 @@ static int dpp_configuration_parse_helper(struct dpp_authentication *auth,
 	struct dpp_configuration *conf = NULL;
 	size_t len;
 
+	/* Check for JSON configuration object */
+	pos = os_strstr(cmd, " conf_json=");
+	if (pos) {
+		pos += 11;
+		if (*pos == '\'') {
+			pos++;
+			end = os_strchr(pos, '\'');
+			if (end) {
+				len = end - pos;
+				auth->conf_obj_json = os_malloc(len + 1);
+				if (!auth->conf_obj_json)
+					goto fail;
+				os_memcpy(auth->conf_obj_json, pos, len);
+				auth->conf_obj_json[len] = '\0';
+				wpa_printf(MSG_DEBUG, "DPP: JSON configuration object provided");
+				return 0;  /* JSON mode - skip traditional parsing */
+			}
+		}
+	}
+
 	pos = os_strstr(cmd, " conf=sta-");
 	if (pos) {
 		conf_sta = dpp_configuration_alloc(pos + 10);
@@ -1528,6 +1548,7 @@ void dpp_auth_deinit(struct dpp_authentication *auth)
 	os_free(auth->e_name);
 	os_free(auth->e_mud_url);
 	os_free(auth->e_band_support);
+	os_free(auth->conf_obj_json);
 #ifdef CONFIG_TESTING_OPTIONS
 	os_free(auth->config_obj_override);
 	os_free(auth->discovery_override);
@@ -1956,6 +1977,7 @@ dpp_build_conf_obj_legacy(struct dpp_authentication *auth,
 	const char *akm_str;
 	size_t len = 1000;
 
+	/* Traditional configuration object generation */
 
 #ifdef CONFIG_DPP3
 	if (conf->idpass &&
@@ -2030,6 +2052,20 @@ dpp_build_conf_obj(struct dpp_authentication *auth, enum dpp_netrole netrole,
 					 os_strlen(auth->config_obj_override));
 	}
 #endif /* CONFIG_TESTING_OPTIONS */
+
+	/* Handle JSON configuration objects */
+	if (auth->conf_obj_json && idx == 0) {
+		struct wpabuf *buf;
+		wpa_printf(MSG_DEBUG, "DPP: Using JSON configuration object for Enrollee(%s)",
+			   dpp_netrole_str(netrole));
+		buf = wpabuf_alloc(os_strlen(auth->conf_obj_json) + 1);
+		if (!buf)
+			return NULL;
+		wpabuf_put_str(buf, auth->conf_obj_json);
+		wpa_hexdump_ascii_key(MSG_DEBUG, "DPP: Configuration Object (JSON)",
+				      wpabuf_head(buf), wpabuf_len(buf));
+		return buf;
+	}
 
 	if (idx == 0) {
 		if (netrole == DPP_NETROLE_STA)

@@ -401,6 +401,7 @@ struct dpp_authentication {
 	char *e_mud_url;
 	int *e_band_support;
 	unsigned int enrollee_capabilities;
+	char *conf_obj_json;  /* Raw JSON configuration object */
 #ifdef CONFIG_TESTING_OPTIONS
 	char *config_obj_override;
 	char *discovery_override;
